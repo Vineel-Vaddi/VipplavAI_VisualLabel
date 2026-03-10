@@ -9,8 +9,11 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
-const MONGODB_URI = process.env.MONGODB_URI;
-const DB_NAME = process.env.MONGODB_DB_NAME || "your_database_name";
+
+// Read these dynamically inside functions later if undefined here
+let getMongoUri = () => process.env.MONGODB_URI;
+let getDbName = () => process.env.MONGODB_DB_NAME || "your_database_name";
+
 
 app.use(express.json({ limit: '50mb' }));
 
@@ -35,12 +38,15 @@ let bucket: GridFSBucket;
 
 async function connectDB() {
   try {
-    if (!MONGODB_URI) {
+    const uri = getMongoUri();
+    const dbName = getDbName();
+
+    if (!uri) {
       throw new Error("MONGODB_URI environment variable is not defined");
     }
     console.log("Connecting to MongoDB...");
     lastDbError = null;
-    const client = await MongoClient.connect(MONGODB_URI, {
+    const client = await MongoClient.connect(uri, {
       connectTimeoutMS: 5000,
       serverSelectionTimeoutMS: 5000,
     });
@@ -48,13 +54,13 @@ async function connectDB() {
     // to reuse across lambda executions if possible.
     if (db) return; // Prevent multiple connections
 
-    db = client.db(DB_NAME);
+    db = client.db(dbName);
     imagesCollection = db.collection("images");
     annotationsCollection = db.collection("annotations");
     usersCollection = db.collection("users");
     workItemsCollection = db.collection("work_items");
     bucket = new GridFSBucket(db, { bucketName: "image_files" });
-    console.log(`Connected to MongoDB: ${DB_NAME}`);
+    console.log(`Connected to MongoDB: ${dbName}`);
 
     // Create indexes
     await imagesCollection.createIndex({ image_id: 1 }, { unique: true });
