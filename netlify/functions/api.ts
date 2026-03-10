@@ -1,5 +1,5 @@
 import serverless from "serverless-http";
-import { app, connectDB } from "../../server.js"; // Adjust extension as needed if tsconfig differs
+import { app, connectDB } from "../../server"; // Adjust extension as needed if tsconfig differs
 
 // Ensure database is connected before handling the request
 // The db connection is cached globally in server.ts
