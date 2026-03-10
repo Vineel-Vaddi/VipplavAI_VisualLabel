@@ -1,0 +1,5 @@
+{
+  "name": "Vipplav AI VisionLabel Pro",
+  "description": "Professional image labeling tool for bounding box annotation with YOLO export and MongoDB integration.",
+  "requestFramePermissions": []
+}

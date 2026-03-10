@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vipplav AI VisionLabel Pro</title>
+    <script>
+      // Suppress benign Vite WebSocket connection errors that can't be resolved due to proxy restrictions.
+      window.addEventListener('unhandledrejection', (event) => {
+        if (event.reason && (
+          (event.reason.message && event.reason.message.includes('WebSocket')) ||
+          (event.reason.toString && event.reason.toString().includes('WebSocket'))
+        )) {
+          event.preventDefault();
+        }
+      });
+      // Also catch standard errors
+      window.addEventListener('error', (event) => {
+        if (event.message && event.message.includes('WebSocket')) {
+          event.preventDefault();
+        }
+      }, true);
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

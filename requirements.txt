@@ -1,0 +1,6 @@
+# VisionLabel Pro - Python Requirements (Reference Only)
+# The actual project uses package.json for dependencies.
+# gradio
+# pymongo
+# pillow
+# python-dotenv
