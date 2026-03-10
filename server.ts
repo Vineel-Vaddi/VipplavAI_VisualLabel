@@ -1,5 +1,5 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
+
 import { MongoClient, ObjectId, GridFSBucket } from "mongodb";
 import dotenv from "dotenv";
 import multer from "multer";
@@ -44,6 +44,10 @@ async function connectDB() {
       connectTimeoutMS: 5000,
       serverSelectionTimeoutMS: 5000,
     });
+    // Store db in req context? No, just keep the global db connection 
+    // to reuse across lambda executions if possible.
+    if (db) return; // Prevent multiple connections
+
     db = client.db(DB_NAME);
     imagesCollection = db.collection("images");
     annotationsCollection = db.collection("annotations");
@@ -538,25 +542,26 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-async function startServer() {
-  await connectDB();
+// Avoid unhandled promise rejections
+export { app, connectDB };
 
-  if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV !== "production" && !process.env.NETLIFY) {
+  async function startServer() {
+    await connectDB();
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: false, // Explicitly disable HMR in middleware mode
+        hmr: false,
       },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    app.use(express.static("dist"));
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  startServer();
 }
-
-startServer();

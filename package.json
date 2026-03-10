@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
+    "@netlify/functions": "^5.1.2",
     "@tailwindcss/vite": "^4.1.14",
     "@types/mongodb": "^4.0.6",
     "@types/multer": "^2.0.0",
@@ -30,6 +31,7 @@
     "react-dom": "^19.0.0",
     "react-dropzone": "^15.0.0",
     "react-konva": "^19.2.3",
+    "serverless-http": "^4.0.0",
     "tailwind-merge": "^3.5.0",
     "use-image": "^1.1.4",
     "vite": "^6.2.0"
