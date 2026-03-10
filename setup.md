@@ -16,7 +16,7 @@ Create a `.env` file in the root directory. You can use `.env.example` as a temp
 # MongoDB Connection URI
 # Example (Atlas): mongodb+srv://<user>:<password>@cluster.mongodb.net/
 # Example (Local): mongodb://localhost:27017
-MONGODB_URI=your_mongodb_connection_string
+MONGODB_URI="<your_mongodb_connection_string>"
 
 # Database Name
 MONGODB_DB_NAME=traffic_violation

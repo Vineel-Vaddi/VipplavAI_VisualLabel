@@ -51,7 +51,7 @@ npm install
 ### 3. Configuration
 Create a `.env` file (see `.env.example` for reference):
 ```env
-MONGODB_URI="mongodb+srv://..."
+MONGODB_URI="<your_mongodb_connection_string>"
 MONGODB_DB_NAME="traffic_violation"
 ```
 
