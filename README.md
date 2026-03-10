@@ -52,7 +52,7 @@ npm install
 Create a `.env` file (see `.env.example` for reference):
 ```env
 MONGODB_URI="<your_mongodb_connection_string>"
-MONGODB_DB_NAME="traffic_violation"
+MONGODB_DB_NAME="<your_database_name>"
 ```
 
 ### 4. Run

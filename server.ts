@@ -10,16 +10,16 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
-const DB_NAME = process.env.MONGODB_DB_NAME || "traffic_violation";
+const DB_NAME = process.env.MONGODB_DB_NAME || "your_database_name";
 
 app.use(express.json({ limit: '50mb' }));
 
 // Middleware to check DB connection
 app.use((req, res, next) => {
   if (req.path.startsWith("/api") && req.path !== "/api/health" && !db) {
-    return res.status(503).json({ 
-      error: "Database not connected", 
-      details: "The server is unable to connect to MongoDB. Please check your connection string." 
+    return res.status(503).json({
+      error: "Database not connected",
+      details: "The server is unable to connect to MongoDB. Please check your connection string."
     });
   }
   next();
@@ -51,14 +51,14 @@ async function connectDB() {
     workItemsCollection = db.collection("work_items");
     bucket = new GridFSBucket(db, { bucketName: "image_files" });
     console.log(`Connected to MongoDB: ${DB_NAME}`);
-    
+
     // Create indexes
     await imagesCollection.createIndex({ image_id: 1 }, { unique: true });
     await imagesCollection.createIndex({ dataset: 1, filename: 1 }, { unique: true });
-    
+
     await annotationsCollection.createIndex({ image_id: 1, is_latest: 1 });
     await annotationsCollection.createIndex({ user_id: 1 });
-    
+
     await usersCollection.createIndex({ name: 1 }, { unique: true });
 
     // work_items indexes
@@ -69,10 +69,10 @@ async function connectDB() {
     await workItemsCollection.createIndex({ lock_expires_at: 1 });
     // Unique constraint: an image can only have ONE active assignment (assigned status)
     await workItemsCollection.createIndex(
-      { image_id: 1 }, 
-      { 
-        unique: true, 
-        partialFilterExpression: { assignment_status: "assigned" } 
+      { image_id: 1 },
+      {
+        unique: true,
+        partialFilterExpression: { assignment_status: "assigned" }
       }
     );
   } catch (err: any) {
@@ -88,9 +88,9 @@ const upload = multer({ storage });
 
 // API Routes
 app.get("/api/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    db: !!db, 
+  res.json({
+    status: "ok",
+    db: !!db,
     error: lastDbError,
     mitigation: lastDbError ? [
       "Check if MONGODB_URI is correct in .env",
@@ -104,9 +104,9 @@ app.get("/api/health", (req, res) => {
 app.post("/api/db/retry", async (req, res) => {
   if (db) return res.json({ status: "already_connected" });
   await connectDB();
-  res.json({ 
-    status: db ? "connected" : "failed", 
-    error: lastDbError 
+  res.json({
+    status: db ? "connected" : "failed",
+    error: lastDbError
   });
 });
 
@@ -125,16 +125,16 @@ app.post("/api/users", async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
-    
+
     const existing = await usersCollection.findOne({ name });
     if (existing) return res.json(existing);
-    
+
     const newUser = {
       name,
       created_at: new Date(),
       total_annotations: 0
     };
-    
+
     const result = await usersCollection.insertOne(newUser);
     res.json({ ...newUser, _id: result.insertedId });
   } catch (err: any) {
@@ -147,7 +147,7 @@ app.post("/api/users", async (req, res) => {
 app.get("/api/images", async (req, res) => {
   try {
     const { status, dataset, limit = 100, skip = 0, user_id, session_id } = req.query;
-    
+
     // If user_id and session_id are provided, we fetch from work_items
     if (user_id && session_id) {
       const workItems = await workItemsCollection.find({
@@ -197,7 +197,7 @@ app.get("/api/images", async (req, res) => {
         workItem: wi
       };
     });
-      
+
     res.json(merged);
   } catch (err) {
     console.error("Fetch images error:", err);
@@ -223,7 +223,7 @@ app.get("/api/images/:imageId/data", async (req, res) => {
     if (!image || !image.gridfs_id) {
       return res.status(404).json({ error: "Image not found" });
     }
-    
+
     const downloadStream = bucket.openDownloadStream(new ObjectId(image.gridfs_id));
     res.set("Content-Type", image.mime_type || "image/jpeg");
     downloadStream.pipe(res);
@@ -239,10 +239,10 @@ app.post("/api/work/assign", async (req, res) => {
     if (!user_id) return res.status(400).json({ error: "user_id is required" });
 
     const session_id = new ObjectId().toString();
-    
+
     // Find images that are not already assigned/completed/skipped in ANY work_item
     // This is a bit tricky. We want images that don't have an 'assigned' or 'completed' work_item.
-    
+
     // 1. Get all image_ids that have active or completed work items
     const unavailableWorkItems = await workItemsCollection.find({
       $or: [
@@ -251,7 +251,7 @@ app.post("/api/work/assign", async (req, res) => {
         { is_skipped: true }
       ]
     }, { projection: { image_id: 1 } }).toArray();
-    
+
     const unavailableImageIds = unavailableWorkItems.map((wi: any) => wi.image_id);
 
     // 2. Find images not in that list
@@ -328,11 +328,11 @@ app.post("/api/work/skip", async (req, res) => {
 
     const result = await workItemsCollection.updateOne(
       { image_id, user_id, session_id, assignment_status: "assigned" },
-      { 
-        $set: { 
-          is_skipped: true, 
-          last_activity_at: new Date() 
-        } 
+      {
+        $set: {
+          is_skipped: true,
+          last_activity_at: new Date()
+        }
       }
     );
 
@@ -353,13 +353,13 @@ app.post("/api/work/done", async (req, res) => {
     // Mark all assigned items in this session as completed
     await workItemsCollection.updateMany(
       { session_id, user_id, assignment_status: "assigned" },
-      { 
-        $set: { 
+      {
+        $set: {
           assignment_status: "completed",
           is_done_clicked: true,
           completed_at: now,
           last_activity_at: now
-        } 
+        }
       }
     );
 
@@ -380,19 +380,19 @@ app.post("/api/images/upload", upload.array("files"), async (req, res) => {
     const files = req.files as Express.Multer.File[];
     const { dataset = "default" } = req.body;
     const results = [];
-    
+
     for (const file of files) {
       const uploadStream = bucket.openUploadStream(file.originalname);
       const readableStream = new Readable();
       readableStream.push(file.buffer);
       readableStream.push(null);
-      
+
       await new Promise((resolve, reject) => {
         readableStream.pipe(uploadStream)
           .on("finish", resolve)
           .on("error", reject);
       });
-      
+
       const imageDoc = {
         image_id: new ObjectId().toString(),
         source: "upload",
@@ -405,11 +405,11 @@ app.post("/api/images/upload", upload.array("files"), async (req, res) => {
         created_at: new Date(),
         updated_at: new Date()
       };
-      
+
       await imagesCollection.insertOne(imageDoc);
       results.push(imageDoc);
     }
-    
+
     res.json({ message: "Uploaded successfully", count: results.length });
   } catch (err) {
     console.error(err);
@@ -430,9 +430,9 @@ app.get("/api/datasets", async (req, res) => {
 // Get annotations (latest by default)
 app.get("/api/annotations/:imageId", async (req, res) => {
   try {
-    const annotation = await annotationsCollection.findOne({ 
-      image_id: req.params.imageId, 
-      is_latest: true 
+    const annotation = await annotationsCollection.findOne({
+      image_id: req.params.imageId,
+      is_latest: true
     });
     res.json(annotation || { image_id: req.params.imageId, boxes: [] });
   } catch (err) {
@@ -444,7 +444,7 @@ app.get("/api/annotations/:imageId", async (req, res) => {
 app.post("/api/annotations", async (req, res) => {
   try {
     const { image_id, boxes, user_id, status, session_id } = req.body;
-    
+
     if (!user_id) return res.status(400).json({ error: "user_id is required" });
     if (!image_id) return res.status(400).json({ error: "image_id is required" });
 
@@ -489,20 +489,20 @@ app.post("/api/annotations", async (req, res) => {
       created_at: new Date(),
       updated_at: new Date()
     };
-    
+
     await annotationsCollection.insertOne(newAnnotation);
-    
+
     // Update work item status
     if (session_id) {
       await workItemsCollection.updateOne(
         { image_id, user_id, session_id, assignment_status: "assigned" },
-        { 
-          $set: { 
+        {
+          $set: {
             annotation_status: status === "labeled" ? "labeled" : "in_progress",
             save_status: "db_saved",
             is_uploaded_to_db: true,
             last_activity_at: new Date()
-          } 
+          }
         }
       );
     }
@@ -514,7 +514,7 @@ app.post("/api/annotations", async (req, res) => {
         { $inc: { total_annotations: 1 } }
       );
     }
-    
+
     res.json({ message: "Saved successfully", version: nextVersion });
   } catch (err) {
     console.error(err);
@@ -526,12 +526,12 @@ app.post("/api/annotations", async (req, res) => {
 app.get("/api/stats", async (req, res) => {
   try {
     const total = await imagesCollection.countDocuments();
-    
+
     // Labeled is now derived from work_items with annotation_status: labeled
     const labeled = await workItemsCollection.countDocuments({ annotation_status: "labeled" });
     const inProgress = await workItemsCollection.countDocuments({ annotation_status: "in_progress", assignment_status: "assigned" });
     const skipped = await workItemsCollection.countDocuments({ is_skipped: true });
-    
+
     res.json({ total, labeled, inProgress, skipped, unlabeled: total - labeled - skipped });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch stats" });
@@ -540,10 +540,10 @@ app.get("/api/stats", async (req, res) => {
 
 async function startServer() {
   await connectDB();
-  
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { 
+      server: {
         middlewareMode: true,
         hmr: false, // Explicitly disable HMR in middleware mode
       },

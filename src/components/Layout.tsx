@@ -22,7 +22,7 @@ export default function Layout({
   isDatasetLoaded = false,
   currentUser,
   source,
-  datasetName = "traffic_violation",
+  datasetName = "your_database_name",
   onSwitchUser
 }: LayoutProps) {
   return (

@@ -14,7 +14,7 @@
 | **MongoDB Version** | 7.1.0 (Simulated Atlas Cluster) |
 | **Browser Used** | Chrome 122.0.x |
 | **Operating System** | Linux (Cloud Run Environment) |
-| **Database Name** | `traffic_violation` |
+| **Database Name** | `<your_database_name>` |
 | **Collections** | `images`, `annotations`, `users`, `work_items`, `image_files.files`, `image_files.chunks` |
 | **Images in DB** | 100 (Test Dataset) |
 | **Users in DB** | 2 (Test Users: `QA_Lead`, `Labeler_01`) |

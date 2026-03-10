@@ -19,7 +19,7 @@ Create a `.env` file in the root directory. You can use `.env.example` as a temp
 MONGODB_URI="<your_mongodb_connection_string>"
 
 # Database Name
-MONGODB_DB_NAME=traffic_violation
+MONGODB_DB_NAME="<your_database_name>"
 ```
 
 ### MongoDB Atlas Setup (Recommended)
