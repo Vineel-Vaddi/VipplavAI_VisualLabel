@@ -551,7 +551,9 @@ app.get("/api/stats", async (req, res) => {
 // Avoid unhandled promise rejections
 export { app, connectDB };
 
-if (process.env.NODE_ENV !== "production" && !process.env.NETLIFY) {
+const isLambda = !!(process.env.LAMBDA_TASK_ROOT || process.env.AWS_EXECUTION_ENV);
+
+if (process.env.NODE_ENV !== "production" && !process.env.NETLIFY && !isLambda) {
   async function startServer() {
     await connectDB();
     const { createServer: createViteServer } = await import("vite");
@@ -569,5 +571,8 @@ if (process.env.NODE_ENV !== "production" && !process.env.NETLIFY) {
     });
   }
 
-  startServer();
+  startServer().catch(err => {
+    console.error("Vite server failed to start:", err);
+  });
 }
+
