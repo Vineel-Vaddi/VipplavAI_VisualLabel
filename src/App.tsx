@@ -41,9 +41,15 @@ export default function App() {
     return saveStatus === "idle" && boxes.length > 0;
   }, [saveStatus, boxes]);
 
-  // Prevent data loss on navigation/reload
+  // Prevent data loss and release assignments on navigation/reload
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Release assignments on unload if session is active
+      if (source === "db" && sessionId && currentUser) {
+        const payload = JSON.stringify({ session_id: sessionId, user_id: currentUser._id });
+        navigator.sendBeacon("/api/work/release", new Blob([payload], { type: 'application/json' }));
+      }
+
       if (hasUnsavedChanges) {
         e.preventDefault();
         e.returnValue = "You have unsaved annotations. If you leave this page, your work will be lost. Continue?";
@@ -52,7 +58,24 @@ export default function App() {
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, source, sessionId, currentUser]);
+
+  // Heartbeat interval
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (source === "db" && sessionId && currentUser) {
+      interval = setInterval(() => {
+        fetch("/api/work/heartbeat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, user_id: currentUser._id })
+        }).catch(err => console.error("Heartbeat failed", err));
+      }, 5 * 60 * 1000); // 5 minutes
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    }
+  }, [source, sessionId, currentUser]);
 
   const addNotification = (message: string, type: "success" | "info" | "warning" = "info") => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -969,6 +992,8 @@ export default function App() {
             {currentImage ? (
               <AnnotationCanvas
                 imageUrl={source === "local" ? currentImage.dataUrl! : `/api/images/${currentImage.image_id}/data`}
+                imageId={currentImage?.image_id}
+                source={source}
                 boxes={boxes}
                 selectedBoxId={selectedBoxId}
                 currentClass={currentClass}

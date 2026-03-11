@@ -34,6 +34,7 @@ let imagesCollection: any;
 let annotationsCollection: any;
 let usersCollection: any;
 let workItemsCollection: any;
+let debugLogsCollection: any;
 let bucket: GridFSBucket;
 
 async function connectDB() {
@@ -59,6 +60,7 @@ async function connectDB() {
     annotationsCollection = db.collection("annotations");
     usersCollection = db.collection("users");
     workItemsCollection = db.collection("work_items");
+    debugLogsCollection = db.collection("debug_logs");
     bucket = new GridFSBucket(db, { bucketName: "image_files" });
     console.log(`Connected to MongoDB: ${dbName}`);
 
@@ -85,10 +87,65 @@ async function connectDB() {
         partialFilterExpression: { assignment_status: "assigned" }
       }
     );
+
+    // debug_logs indexes
+    await debugLogsCollection.createIndex({ created_at: -1 });
+    await debugLogsCollection.createIndex({ image_id: 1, created_at: -1 });
+
+    // chunks index
+    await db.collection("image_files.chunks").createIndex({ files_id: 1, n: 1 });
   } catch (err: any) {
     lastDbError = err.message;
     console.error("Failed to connect to MongoDB:", err.message);
     // Don't crash the server, but log the failure
+  }
+}
+
+// Debug logger helper
+async function debugLog(level: string, scope: string, message: string, data: any = {}) {
+  try {
+    if (!debugLogsCollection) return;
+    await debugLogsCollection.insertOne({
+      level,
+      scope,
+      message,
+      request_id: data.request_id || new ObjectId().toString(),
+      image_id: data.image_id || null,
+      user_id: data.user_id || null,
+      session_id: data.session_id || null,
+      created_at: new Date(),
+      ...data
+    });
+  } catch (err) {
+    console.error("Failed to write debug log:", err);
+  }
+}
+
+// Release expired assignments helper
+async function releaseExpiredAssignments() {
+  try {
+    if (!workItemsCollection) return 0;
+    const now = new Date();
+    const result = await workItemsCollection.updateMany(
+      {
+        assignment_status: "assigned",
+        lock_expires_at: { $lt: now }
+      },
+      {
+        $set: {
+          assignment_status: "released",
+          released_at: now,
+          last_activity_at: now
+        }
+      }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`Released ${result.modifiedCount} expired assignments`);
+    }
+    return result.modifiedCount;
+  } catch (err) {
+    console.error("Failed to release expired assignments:", err);
+    return 0;
   }
 }
 
@@ -160,6 +217,7 @@ app.get("/api/images", async (req, res) => {
 
     // If user_id and session_id are provided, we fetch from work_items
     if (user_id && session_id) {
+      await releaseExpiredAssignments();
       const workItems = await workItemsCollection.find({
         user_id,
         session_id,
@@ -228,23 +286,110 @@ app.get("/api/images/:imageId", async (req, res) => {
 
 // Get single image data by image_id
 app.get("/api/images/:imageId/data", async (req, res) => {
+  const reqId = new ObjectId().toString();
+  const { imageId } = req.params;
+  
   try {
-    const image = await imagesCollection.findOne({ image_id: req.params.imageId });
-    if (!image || !image.gridfs_id) {
+    await debugLog("info", "image_fetch", "Image fetch started", { request_id: reqId, image_id: imageId });
+    
+    const image = await imagesCollection.findOne({ image_id: imageId });
+    if (!image) {
+      await debugLog("error", "image_fetch", "Image document missing", { request_id: reqId, image_id: imageId });
       return res.status(404).json({ error: "Image not found" });
     }
+    if (!image.gridfs_id) {
+      await debugLog("error", "image_fetch", "gridfs_id missing", { request_id: reqId, image_id: imageId });
+      return res.status(404).json({ error: "Image has no gridfs file associated" });
+    }
 
-    const downloadStream = bucket.openDownloadStream(new ObjectId(image.gridfs_id));
-    res.set("Content-Type", image.mime_type || "image/jpeg");
+    let gridfsId: ObjectId;
+    try {
+      gridfsId = new ObjectId(image.gridfs_id);
+    } catch (e: any) {
+      await debugLog("error", "image_fetch", "Invalid gridfs_id string", { request_id: reqId, image_id: imageId, gridfs_id: image.gridfs_id });
+      return res.status(500).json({ error: "Invalid GridFS ID format" });
+    }
+
+    const fileMeta = await db.collection("image_files.files").findOne({ _id: gridfsId });
+    if (!fileMeta) {
+      await debugLog("error", "image_fetch", "GridFS file metadata missing", { request_id: reqId, image_id: imageId, gridfs_id: image.gridfs_id });
+      return res.status(404).json({ error: "GridFS file metadata missing" });
+    }
+
+    const chunksCount = await db.collection("image_files.chunks").countDocuments({ files_id: gridfsId });
+    if (chunksCount === 0) {
+      await debugLog("error", "image_fetch", "Chunks missing", { request_id: reqId, image_id: imageId, gridfs_id: image.gridfs_id });
+      return res.status(404).json({ error: "GridFS file chunks missing" });
+    }
+
+    await debugLog("info", "image_fetch", "Stream started", { request_id: reqId, image_id: imageId, chunks: chunksCount });
+    const downloadStream = bucket.openDownloadStream(gridfsId);
+    
+    downloadStream.on('error', async (err) => {
+      await debugLog("error", "image_fetch", "Stream failed", { request_id: reqId, image_id: imageId, error: err.message });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to stream image data", request_id: reqId });
+      }
+    });
+
+    res.set("Content-Type", image.mime_type || fileMeta.contentType || "image/jpeg");
     downloadStream.pipe(res);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch image data" });
+  } catch (err: any) {
+    await debugLog("error", "image_fetch", "Unexpected exception", { request_id: reqId, image_id: imageId, error: err.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to fetch image data", details: err.message, request_id: reqId });
+    }
   }
+});
+
+// Debug image info
+app.get("/api/debug/image/:imageId", async (req, res) => {
+  try {
+    const { imageId } = req.params;
+    const image = await imagesCollection.findOne({ image_id: imageId });
+    
+    const debugInfo: any = {
+      image_id: imageId,
+      image_document_exists: !!image,
+      image: image,
+      gridfs_file_exists: false,
+      chunks_count: 0,
+      work_items: [],
+      annotations: []
+    };
+
+    if (image?.gridfs_id) {
+      let gridfsId;
+      try {
+        gridfsId = new ObjectId(image.gridfs_id);
+        const fileMeta = await db.collection("image_files.files").findOne({ _id: gridfsId });
+        debugInfo.gridfs_file_exists = !!fileMeta;
+        if (fileMeta) {
+          debugInfo.chunks_count = await db.collection("image_files.chunks").countDocuments({ files_id: gridfsId });
+        }
+      } catch (e) {
+        debugInfo.gridfs_id_invalid = true;
+      }
+    }
+
+    debugInfo.work_items = await workItemsCollection.find({ image_id: imageId }).sort({ created_at: -1 }).toArray();
+    debugInfo.annotations = await annotationsCollection.find({ image_id: imageId }).sort({ version: -1 }).toArray();
+    
+    res.json(debugInfo);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch debug info", details: err.message });
+  }
+});
+
+app.post("/api/debug/work/release-expired", async (req, res) => {
+  const count = await releaseExpiredAssignments();
+  res.json({ released_count: count });
 });
 
 // Batch assignment logic
 app.post("/api/work/assign", async (req, res) => {
   try {
+    await releaseExpiredAssignments();
     const { user_id, dataset, limit = 100 } = req.body;
     if (!user_id) return res.status(400).json({ error: "user_id is required" });
 
@@ -279,7 +424,7 @@ app.post("/api/work/assign", async (req, res) => {
 
     // 3. Create work_items for these images
     const now = new Date();
-    const lockExpiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24h lock
+    const lockExpiresAt = new Date(now.getTime() + 30 * 60 * 1000); // 30m lock
 
     const workItems = availableImages.map((img: any) => ({
       image_id: img.image_id,
@@ -382,6 +527,55 @@ app.post("/api/work/done", async (req, res) => {
 // Assign image to user (Locking) by image_id - DEPRECATED in favor of batch assign
 app.post("/api/images/:imageId/assign", async (req, res) => {
   res.status(410).json({ error: "This endpoint is deprecated. Use /api/work/assign instead." });
+});
+
+// Heartbeat to extend active session
+app.post("/api/work/heartbeat", async (req, res) => {
+  try {
+    const { session_id, user_id } = req.body;
+    if (!session_id || !user_id) return res.status(400).json({ error: "Missing required fields" });
+
+    const now = new Date();
+    const lockExpiresAt = new Date(now.getTime() + 30 * 60 * 1000);
+
+    const result = await workItemsCollection.updateMany(
+      { session_id, user_id, assignment_status: "assigned" },
+      {
+        $set: {
+          lock_expires_at: lockExpiresAt,
+          last_activity_at: now
+        }
+      }
+    );
+
+    res.json({ message: "Heartbeat successful", extended_count: result.modifiedCount });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to process heartbeat", details: err.message });
+  }
+});
+
+// Release active assignments safely
+app.post("/api/work/release", async (req, res) => {
+  try {
+    const { session_id, user_id } = req.body;
+    if (!session_id || !user_id) return res.status(400).json({ error: "Missing required fields" });
+
+    const now = new Date();
+    const result = await workItemsCollection.updateMany(
+      { session_id, user_id, assignment_status: "assigned" },
+      {
+        $set: {
+          assignment_status: "released",
+          released_at: now,
+          last_activity_at: now
+        }
+      }
+    );
+
+    res.json({ message: "Released assignments", released_count: result.modifiedCount });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to release assignments", details: err.message });
+  }
 });
 
 // Upload images

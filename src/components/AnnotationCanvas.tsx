@@ -4,6 +4,8 @@ import { clsx } from "clsx";
 
 interface AnnotationCanvasProps {
   imageUrl: string;
+  imageId?: string;
+  source?: "local" | "db" | null;
   boxes: BoundingBox[];
   selectedBoxId: string | null;
   currentClass: LabelClass;
@@ -15,6 +17,8 @@ interface AnnotationCanvasProps {
 
 const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   imageUrl,
+  imageId,
+  source,
   boxes,
   selectedBoxId,
   currentClass,
@@ -33,10 +37,12 @@ const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   const [drawingState, setDrawingState] = useState<"idle" | "drawing" | "finalized">("idle");
   const [startPos, setStartPos] = useState<{ x: number; y: number; imgX: number; imgY: number } | null>(null);
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   
   // Reset error when URL changes
   useEffect(() => {
     setImgError(false);
+    setDebugInfo(null);
   }, [imageUrl]);
 
   // Handle image loading
@@ -48,8 +54,19 @@ const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     updateDisplaySize();
   };
 
-  const handleImageError = () => {
+  const handleImageError = async () => {
     setImgError(true);
+    if (source === "db" && imageId) {
+      try {
+        const res = await fetch(`/api/debug/image/${imageId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setDebugInfo(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch debug info", err);
+      }
+    }
   };
 
   // Update display size and scale
@@ -191,15 +208,47 @@ const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       />
 
       {imgError && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-red-500 bg-neutral-900 gap-2 p-4 text-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-900 gap-2 p-4 text-center overflow-auto z-40">
           <div className="text-4xl">⚠️</div>
-          <div className="font-bold">Failed to load image</div>
+          <div className="font-bold text-red-500">Failed to load image</div>
           <div className="text-xs text-neutral-500 break-all max-w-md">{imageUrl}</div>
-          <div className="text-xs mt-2 text-neutral-400">
-            {imageUrl.startsWith('/api') 
-              ? "The server could not find the image in MongoDB. Check if the database is connected." 
-              : "The local file reference might be invalid or blocked by the browser."}
-          </div>
+          
+          {debugInfo ? (
+            <div className="mt-4 p-4 bg-black/50 border border-red-500/30 rounded-lg text-left max-w-xl w-full">
+              <h3 className="text-emerald-500 font-bold mb-3 text-xs uppercase tracking-wider">Diagnostic Information</h3>
+              <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-2 text-xs font-mono">
+                <div className="text-neutral-400">Image ID:</div>
+                <div className="text-white break-all">{debugInfo.image_id}</div>
+                
+                <div className="text-neutral-400">Image Document:</div>
+                <div className={debugInfo.image_document_exists ? "text-emerald-400" : "text-red-400"}>
+                  {debugInfo.image_document_exists ? "Found" : "Missing"}
+                </div>
+                
+                <div className="text-neutral-400">GridFS Link:</div>
+                <div className={debugInfo.gridfs_file_exists ? "text-emerald-400" : "text-red-400"}>
+                  {debugInfo.gridfs_file_exists ? "Valid" : "Broken or Missing"}
+                </div>
+                
+                <div className="text-neutral-400">Chunks Found:</div>
+                <div className={debugInfo.chunks_count > 0 ? "text-emerald-400" : "text-red-400"}>
+                  {debugInfo.chunks_count} chunks
+                </div>
+              </div>
+              
+              {debugInfo.image?.gridfs_id && (
+                <div className="mt-4 pt-3 border-t border-white/10 text-[10px] text-neutral-500">
+                  Target GridFS ID: <span className="text-neutral-300">{debugInfo.image.gridfs_id}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs mt-2 text-neutral-400 max-w-md">
+              {imageUrl.startsWith('/api') 
+                ? "The server could not find the image in MongoDB. Check if the database is connected." 
+                : "The local file reference might be invalid or blocked by the browser."}
+            </div>
+          )}
         </div>
       )}
 
