@@ -12,7 +12,7 @@ const PORT = 3000;
 
 // Read these dynamically inside functions later if undefined here
 let getMongoUri = () => process.env.MONGODB_URI;
-let getDbName = () => process.env.MONGODB_DB_NAME || "your_database_name";
+let getDbName = () => process.env.MONGODB_DB_NAME || "traffic_violation";
 
 
 app.use(express.json({ limit: '50mb' }));
@@ -38,6 +38,7 @@ let debugLogsCollection: any;
 let bucket: GridFSBucket;
 
 async function connectDB() {
+  if (db) return; // Prevent multiple connections
   try {
     const uri = getMongoUri();
     const dbName = getDbName();
@@ -45,7 +46,7 @@ async function connectDB() {
     if (!uri) {
       throw new Error("MONGODB_URI environment variable is not defined");
     }
-    console.log("Connecting to MongoDB...");
+    console.log(`Connecting to MongoDB... (DB Name: ${dbName}, URI present: true)`);
     lastDbError = null;
     const client = await MongoClient.connect(uri, {
       connectTimeoutMS: 5000,
@@ -53,7 +54,7 @@ async function connectDB() {
     });
     // Store db in req context? No, just keep the global db connection 
     // to reuse across lambda executions if possible.
-    if (db) return; // Prevent multiple connections
+    if (db) return; // Prevent race conditions if another invocation connected while we were awaiting
 
     db = client.db(dbName);
     imagesCollection = db.collection("images");
@@ -158,6 +159,8 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     db: !!db,
+    has_mongo_uri: !!getMongoUri(),
+    db_name: getDbName(),
     error: lastDbError,
     mitigation: lastDbError ? [
       "Check if MONGODB_URI is correct in .env",

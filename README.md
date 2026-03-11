@@ -15,6 +15,16 @@ Professional image labeling tool for bounding box annotation, designed for high-
 - [**Setup Guide**](./setup.md): Detailed instructions on environment variables and database configuration.
 - [**Changelog**](./changelog.md): History of features, fixes, and improvements.
 
+## 🔧 Netlify Deployment Fix Summary
+Recently, the application was adapted for Netlify deployment. The following deployment issues were resolved:
+- **Root Cause**: The Netlify API redirect rule stripped the subpath, causing all API calls to return 404s. Additionally, the backend used an incorrect placeholder fallback DB name instead of the production DB name.
+- **What was corrected**: 
+  - Updated `netlify.toml` redirect from `to = "/.netlify/functions/api"` to `to = "/.netlify/functions/api/:splat"` to properly preserve API subpaths.
+  - Restored the fallback database name to `traffic_violation`.
+  - Fixed a race condition in `server.ts` where multiple database connections could be established in the serverless environment.
+  - Enhanced `/api/health` to safely check if the `MONGODB_URI` string is present and print the resolved database name.
+- **Netlify Configuration**: Ensure you set `MONGODB_URI` and optionally `MONGODB_DB_NAME` in your Netlify site UI Environment Variables.
+
 ## 🖱️ How to Use
 
 ### 1. Profile Selection
@@ -79,3 +89,16 @@ Open `http://localhost:3000`.
 
 ### Performance
 - **Indexed Queries**: The `work_items` collection is heavily indexed on `user_id`, `session_id`, `dataset`, and `assignment_status` for fast filtering and retrieval.
+
+## 🚀 Deployment & App Architecture
+
+### Netlify Serverless Routing
+When deploying to Netlify, API routing is handled by mapping `/api/*` requests to an Express app via the `netlify/functions/api.ts` serverless wrapper. **Crucially**, the `netlify.toml` configuration requires the `/:splat` redirect (`to = "/.netlify/functions/api/:splat"`) so that dynamic Express routes receive the correct original path.
+
+### Image Retrieval (MongoDB/GridFS)
+Since images can be large, they are stored in MongoDB using `GridFS`. The frontend fetches structural metadata from the `images` collection, and uses the `gridfs_id` to reliably stream the raw binary content via the robust `/api/images/gridfs/:gridfsId` endpoint, which is designed to handle serverless chunked streaming correctly.
+
+**Known Deployment Pitfalls:**
+- Missing the `/:splat` redirect rule in `netlify.toml`.
+- Forgetting to configure `MONGODB_URI` in the cloud environment provider's settings.
+- Netlify functions have a strict execution timeout (usually 10s on the free tier) which GridFS parsing must complete within.
