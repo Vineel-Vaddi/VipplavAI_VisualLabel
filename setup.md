@@ -18,7 +18,7 @@ Create a `.env` file in the root directory. You can use `.env.example` as a temp
 # Example (Local): mongodb://localhost:27017
 MONGODB_URI="<your_mongodb_connection_string>"
 
-# Database Name (Defaults to "traffic_violation" if not provided)
+# Database Name (Required: Must be set in environment variables)
 MONGODB_DB_NAME="<your_database_name>"
 ```
 
@@ -71,14 +71,17 @@ It will return a JSON response like:
   "status": "ok",
   "db": true,
   "has_mongo_uri": true,
-  "db_name": "traffic_violation",
+  "has_mongo_db_name": true,
   "error": null,
   "mitigation": null
 }
 ```
 
 ### Useful Debugging Tips
-If you are deploying to Netlify or another serverless provider, you can use the `/api/health` endpoint to verify that your environment variables were successfully injected at runtime (e.g. `has_mongo_uri: true` and the correct `db_name` is present). It will never expose your actual database URI.
+If you are deploying to Netlify or another serverless provider, you can use the `/api/health` endpoint to verify that your environment variables were successfully injected at runtime (e.g. `has_mongo_uri: true` and `has_mongo_db_name: true`). It will never expose your actual database URI or database name.
+
+**Note on Secret Scanning:** 
+Netlify may block deployments if it detects what it thinks are secret strings (such as the actual database name) hardcoded in the repository (e.g. inside `README.md` or `server.ts`). Ensure you do not commit real database names. You must provide `MONGODB_DB_NAME` via the Netlify dashboard `Environment Variables` section instead.
 
 ## 6. Data Population
 

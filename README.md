@@ -20,9 +20,9 @@ Recently, the application was adapted for Netlify deployment. The following depl
 - **Root Cause**: The Netlify API redirect rule stripped the subpath, causing all API calls to return 404s. Additionally, the backend used an incorrect placeholder fallback DB name instead of the production DB name.
 - **What was corrected**: 
   - Updated `netlify.toml` redirect from `to = "/.netlify/functions/api"` to `to = "/.netlify/functions/api/:splat"` to properly preserve API subpaths.
-  - Restored the fallback database name to `traffic_violation`.
+  - Removed the hardcoded database fallback name to ensure compatibility with Netlify's secret scanning, making `MONGODB_DB_NAME` a required environment variable instead.
   - Fixed a race condition in `server.ts` where multiple database connections could be established in the serverless environment.
-  - Enhanced `/api/health` to safely check if the `MONGODB_URI` string is present and print the resolved database name.
+  - Enhanced `/api/health` to safely check if the `MONGODB_URI` and `MONGODB_DB_NAME` strings are present without leaking them.
 - **Netlify Configuration**: Ensure you set `MONGODB_URI` and optionally `MONGODB_DB_NAME` in your Netlify site UI Environment Variables.
 
 ## 🖱️ How to Use

@@ -12,7 +12,7 @@ const PORT = 3000;
 
 // Read these dynamically inside functions later if undefined here
 let getMongoUri = () => process.env.MONGODB_URI;
-let getDbName = () => process.env.MONGODB_DB_NAME || "traffic_violation";
+let getDbName = () => process.env.MONGODB_DB_NAME;
 
 
 app.use(express.json({ limit: '50mb' }));
@@ -46,7 +46,10 @@ async function connectDB() {
     if (!uri) {
       throw new Error("MONGODB_URI environment variable is not defined");
     }
-    console.log(`Connecting to MongoDB... (DB Name: ${dbName}, URI present: true)`);
+    if (!dbName) {
+      throw new Error("MONGODB_DB_NAME environment variable is not defined");
+    }
+    console.log(`Connecting to MongoDB... (URI present: true, DB Name present: true)`);
     lastDbError = null;
     const client = await MongoClient.connect(uri, {
       connectTimeoutMS: 5000,
@@ -160,7 +163,7 @@ app.get("/api/health", (req, res) => {
     status: "ok",
     db: !!db,
     has_mongo_uri: !!getMongoUri(),
-    db_name: getDbName(),
+    has_mongo_db_name: !!getDbName(),
     error: lastDbError,
     mitigation: lastDbError ? [
       "Check if MONGODB_URI is correct in .env",
