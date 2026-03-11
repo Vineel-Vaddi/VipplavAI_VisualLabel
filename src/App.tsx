@@ -742,6 +742,7 @@ export default function App() {
       isDatasetLoaded={isDatasetLoaded}
       currentUser={currentUser}
       source={source}
+      datasetName={currentImage?.dataset || "All Datasets"}
       onSwitchUser={() => setShowUserModal(true)}
       sidebar={
         view === "home" ? null :

@@ -1,11 +1,11 @@
 import serverless from "serverless-http";
-import { app, connectDB } from "../../server"; // Adjust extension as needed if tsconfig differs
+import { app, connectDB } from "../../server";
 
-// Ensure database is connected before handling the request
-// The db connection is cached globally in server.ts
 const handler = async (event: any, context: any) => {
     await connectDB();
-    const serverlessHandler = serverless(app);
+    const serverlessHandler = serverless(app, {
+        binary: ['image/*', 'image/jpeg', 'image/png']
+    });
     return serverlessHandler(event, context);
 };
 

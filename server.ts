@@ -323,7 +323,8 @@ app.get("/api/images/gridfs/:gridfsId", async (req, res) => {
       gridfs_id: gridfsId, 
       chunks: chunksCount,
       content_type: fileMeta.contentType,
-      length: fileMeta.length 
+      length: fileMeta.length,
+      route_mode: "stream"
     });
     
     const downloadStream = bucket.openDownloadStream(objectId);
@@ -399,7 +400,13 @@ app.get("/api/images/:imageId/data", async (req, res) => {
       return res.status(404).json({ error: "GridFS file chunks missing" });
     }
 
-    await debugLog("info", "image_fetch", "Stream started", { request_id: reqId, image_id: imageId, chunks: chunksCount });
+    await debugLog("info", "image_fetch", "Stream started", { 
+      request_id: reqId, 
+      image_id: imageId, 
+      chunks: chunksCount, 
+      route_mode: "stream",
+      content_type: image.mime_type || fileMeta.contentType || "image/jpeg"
+    });
     const downloadStream = bucket.openDownloadStream(gridfsId);
     
     downloadStream.on('error', async (err) => {

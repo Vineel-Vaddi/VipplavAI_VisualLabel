@@ -83,6 +83,9 @@ If you are deploying to Netlify or another serverless provider, you can use the 
 **Note on Secret Scanning:** 
 Netlify may block deployments if it detects what it thinks are secret strings (such as the actual database name) hardcoded in the repository (e.g. inside `README.md` or `server.ts`). Ensure you do not commit real database names. You must provide `MONGODB_DB_NAME` via the Netlify dashboard `Environment Variables` section instead.
 
+**Note on Image Binary Transport:**
+When images are requested from GridFS, they route through `netlify/functions/api.ts`. Because AWS Lambda/Netlify expects string endpoints by default, `serverless-http` is configured with `binary: ['image/*', 'image/jpeg', 'image/png']` to ensure these payloads are safely encoded in `base64` over the wire before the Netlify Edge decodes them for the browser. If adding new image formats, ensure they match this wildcard array.
+
 ## 6. Data Population
 
 To start labeling, you need images in your database.
