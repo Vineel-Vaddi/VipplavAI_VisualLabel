@@ -991,7 +991,7 @@ export default function App() {
           <div className="flex-1 relative">
             {currentImage ? (
               <AnnotationCanvas
-                imageUrl={source === "local" ? currentImage.dataUrl! : `/api/images/${currentImage.image_id}/data`}
+                imageUrl={source === "local" ? currentImage.dataUrl! : `/api/images/${encodeURIComponent(currentImage.image_id)}/data`}
                 imageId={currentImage?.image_id}
                 source={source}
                 boxes={boxes}

@@ -58,7 +58,7 @@ const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     setImgError(true);
     if (source === "db" && imageId) {
       try {
-        const res = await fetch(`/api/debug/image/${imageId}`);
+        const res = await fetch(`/api/debug/image/${encodeURIComponent(imageId)}`);
         if (res.ok) {
           const data = await res.json();
           setDebugInfo(data);
@@ -217,7 +217,10 @@ const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
             <div className="mt-4 p-4 bg-black/50 border border-red-500/30 rounded-lg text-left max-w-xl w-full">
               <h3 className="text-emerald-500 font-bold mb-3 text-xs uppercase tracking-wider">Diagnostic Information</h3>
               <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-2 text-xs font-mono">
-                <div className="text-neutral-400">Image ID:</div>
+                <div className="text-neutral-400">Raw URL Param:</div>
+                <div className="text-yellow-400 break-all">{debugInfo.image_id_raw || "N/A"}</div>
+                
+                <div className="text-neutral-400">Decoded Image ID:</div>
                 <div className="text-white break-all">{debugInfo.image_id}</div>
                 
                 <div className="text-neutral-400">Image Document:</div>

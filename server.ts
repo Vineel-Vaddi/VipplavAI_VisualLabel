@@ -287,10 +287,17 @@ app.get("/api/images/:imageId", async (req, res) => {
 // Get single image data by image_id
 app.get("/api/images/:imageId/data", async (req, res) => {
   const reqId = new ObjectId().toString();
-  const { imageId } = req.params;
+  // Express usually decodes req.params automatically, but we ensure it's fully decoded
+  const rawParamId = req.params.imageId;
+  const imageId = decodeURIComponent(rawParamId);
   
   try {
-    await debugLog("info", "image_fetch", "Image fetch started", { request_id: reqId, image_id: imageId });
+    await debugLog("info", "image_fetch", "Route entered", { 
+      request_id: reqId, 
+      original_url: req.originalUrl,
+      raw_param: rawParamId,
+      decoded_id: imageId 
+    });
     
     const image = await imagesCollection.findOne({ image_id: imageId });
     if (!image) {
@@ -345,10 +352,13 @@ app.get("/api/images/:imageId/data", async (req, res) => {
 // Debug image info
 app.get("/api/debug/image/:imageId", async (req, res) => {
   try {
-    const { imageId } = req.params;
+    const rawParamId = req.params.imageId;
+    const imageId = decodeURIComponent(rawParamId);
+    
     const image = await imagesCollection.findOne({ image_id: imageId });
     
     const debugInfo: any = {
+      image_id_raw: rawParamId,
       image_id: imageId,
       image_document_exists: !!image,
       image: image,
