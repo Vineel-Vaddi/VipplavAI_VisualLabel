@@ -284,7 +284,71 @@ app.get("/api/images/:imageId", async (req, res) => {
   }
 });
 
-// Get single image data by image_id
+// Get single image data by gridfs_id (New Robust Route)
+app.get("/api/images/gridfs/:gridfsId", async (req, res) => {
+  const reqId = new ObjectId().toString();
+  const { gridfsId } = req.params;
+  
+  try {
+    await debugLog("info", "gridfs_fetch", "GridFS fetch route entered", { request_id: reqId, gridfs_id: gridfsId });
+    
+    let objectId: ObjectId;
+    try {
+      objectId = new ObjectId(gridfsId);
+    } catch (e: any) {
+      await debugLog("error", "gridfs_fetch", "Invalid gridfs_id string", { request_id: reqId, gridfs_id: gridfsId });
+      return res.status(400).json({ error: "Invalid GridFS ID format" });
+    }
+
+    const fileMeta = await db.collection("image_files.files").findOne({ _id: objectId });
+    if (!fileMeta) {
+      await debugLog("error", "gridfs_fetch", "GridFS file metadata missing", { request_id: reqId, gridfs_id: gridfsId });
+      return res.status(404).json({ error: "GridFS file metadata missing" });
+    }
+
+    const chunksCount = await db.collection("image_files.chunks").countDocuments({ files_id: objectId });
+    if (chunksCount === 0) {
+      await debugLog("error", "gridfs_fetch", "Chunks missing", { request_id: reqId, gridfs_id: gridfsId });
+      return res.status(404).json({ error: "GridFS file chunks missing" });
+    }
+
+    await debugLog("info", "gridfs_fetch", "Stream started", { 
+      request_id: reqId, 
+      gridfs_id: gridfsId, 
+      chunks: chunksCount,
+      content_type: fileMeta.contentType,
+      length: fileMeta.length 
+    });
+    
+    const downloadStream = bucket.openDownloadStream(objectId);
+    
+    downloadStream.on('error', async (err) => {
+      await debugLog("error", "gridfs_fetch", "Stream failed", { request_id: reqId, gridfs_id: gridfsId, error: err.message });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to stream image data", request_id: reqId });
+      }
+    });
+
+    downloadStream.on('end', async () => {
+      await debugLog("info", "gridfs_fetch", "Stream ended successfully", { request_id: reqId, gridfs_id: gridfsId });
+    });
+
+    res.set("Content-Type", fileMeta.contentType || "image/jpeg");
+    if (fileMeta.length) {
+      res.set("Content-Length", fileMeta.length.toString());
+    }
+    
+    downloadStream.pipe(res);
+  } catch (err: any) {
+    await debugLog("error", "gridfs_fetch", "Unexpected exception", { request_id: reqId, gridfs_id: gridfsId, error: err.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to fetch image data", details: err.message, request_id: reqId });
+    }
+  }
+});
+
+// Get single image data by image_id (Legacy endpoint, keep for backwards compatibility if needed, but not used by new frontend)
+// This will still work for images without special characters.
 app.get("/api/images/:imageId/data", async (req, res) => {
   const reqId = new ObjectId().toString();
   // Express usually decodes req.params automatically, but we ensure it's fully decoded

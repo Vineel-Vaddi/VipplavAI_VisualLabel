@@ -439,7 +439,9 @@ export default function App() {
       
       if (!imageData && source === "db") {
         try {
-          const res = await fetch(`/api/images/${img.image_id}/data`);
+          // If no gridfs_id, fallback to old route for backward compatibility during export if needed
+          const fetchUrl = img.gridfs_id ? `/api/images/gridfs/${img.gridfs_id}` : `/api/images/${encodeURIComponent(img.image_id)}/data`;
+          const res = await fetch(fetchUrl);
           imageData = await res.blob();
         } catch (e) {
           console.error(`Failed to fetch image data for ${img.filename}`, e);
@@ -793,6 +795,19 @@ export default function App() {
         )
       }
     >
+      {/* Hidden File Input for Local Folder Loading */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        multiple 
+        className="hidden" 
+        accept="image/*"
+        // @ts-ignore - these attributes are needed for folder selection but not in official react types
+        webkitdirectory=""
+        directory=""
+      />
+
       {/* Notifications */}
       <div className="fixed top-20 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
         <AnimatePresence>
@@ -972,15 +987,6 @@ export default function App() {
         />
       ) : (
         <>
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileChange} 
-            multiple 
-            className="hidden" 
-            accept="image/*"
-          />
-          
           {isLoading && (
             <div className="absolute inset-0 z-50 bg-neutral-950/80 backdrop-blur-sm flex flex-col items-center justify-center">
               <Loader2 size={48} className="text-emerald-500 animate-spin mb-4" />
@@ -991,7 +997,7 @@ export default function App() {
           <div className="flex-1 relative">
             {currentImage ? (
               <AnnotationCanvas
-                imageUrl={source === "local" ? currentImage.dataUrl! : `/api/images/${encodeURIComponent(currentImage.image_id)}/data`}
+                imageUrl={source === "local" ? currentImage.dataUrl! : (currentImage.gridfs_id ? `/api/images/gridfs/${currentImage.gridfs_id}` : `/api/images/${encodeURIComponent(currentImage.image_id)}/data`)}
                 imageId={currentImage?.image_id}
                 source={source}
                 boxes={boxes}

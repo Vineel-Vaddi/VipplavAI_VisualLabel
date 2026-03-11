@@ -43,6 +43,7 @@ export interface BoundingBox {
 export interface ImageDoc {
   _id: string;
   image_id: string;
+  gridfs_id?: string;
   filename: string;
   dataset?: string;
   width: number;
